@@ -1,0 +1,79 @@
+/* ------------------------------------------------------- */
+/* ZZZXSQL  - XSQL install program                         */
+/* Parameters:                                             */
+/*                                                         */
+/* - Objects library                                       */
+/*                                                         */
+/* ------------------------------------------------------- */
+             PGM        PARM(&OBJLIB)
+
+             DCL        VAR(&ObjLib)  TYPE(*CHAR) LEN(10)
+             DCL        VAR(&Error)   TYPE(*CHAR) LEN(3)
+             DCL        VAR(&jobTp)   TYPE(*CHAR) LEN(1)
+             DCL        VAR(&MsgID)   TYPE(*CHAR) LEN(7)
+             DCL        VAR(&MsgTxt)  TYPE(*CHAR) LEN(132)
+
+/* Check if library exists                                   */
+             CHKOBJ     OBJ(&ObjLib) OBJTYPE(*LIB)
+             MONMSG     MSGID(CPF9801) EXEC(DO)
+             CHGVAR     VAR(&MSGTXT) VALUE('Library does not exist')
+             CALLSUBR   SUBR(ERRORS)
+             ENDDO
+/* Check if source file QXSQL exists                         */
+             CHKOBJ     OBJ(&ObjLib/QXSQL) OBJTYPE(*FILE)
+             MONMSG     MSGID(CPF9801) EXEC(DO)
+             CHGVAR     VAR(&MSGTXT) VALUE('Source file QXSQL not +
+                          found in library ' *CAT &OBJLIB)
+             CALLSUBR   SUBR(ERRORS)
+             ENDDO
+/* Compile programs ---------------------------------------- */
+             CRTBNDCL   PGM(&OBJLIB/XSQL0000) SRCFILE(&OBJLIB/QXSQL) +
+                          SRCMBR(XSQL0000) DBGVIEW(*ALL)
+
+             CRTSQLRPGI OBJ(&OBJLIB/XSQL0001) SRCFILE(&OBJLIB/QXSQL) +
+                          SRCMBR(XSQL0001) COMMIT(*NONE) +
+                          REPLACE(*YES) DBGVIEW(*SOURCE)
+             CRTSQLRPGI OBJ(&OBJLIB/XSQL0002) SRCFILE(&OBJLIB/QXSQL) +
+                          SRCMBR(XSQL0002) COMMIT(*NONE) +
+                          REPLACE(*YES) DBGVIEW(*SOURCE)
+             CRTSQLRPGI OBJ(&OBJLIB/XSQL0003) SRCFILE(&OBJLIB/QXSQL) +
+                          SRCMBR(XSQL0003) COMMIT(*NONE) +
+                          REPLACE(*YES) DBGVIEW(*SOURCE)
+             CRTSQLRPGI OBJ(&OBJLIB/XSQL0101) SRCFILE(&OBJLIB/QXSQL) +
+                          SRCMBR(XSQL0101) COMMIT(*NONE) +
+                          REPLACE(*YES) DBGVIEW(*SOURCE)
+
+             CRTCMD     CMD(&OBJLIB/XSQL) PGM(XSQL0000) +
+                          SRCFILE(&OBJLIB/QXSQL)
+
+/* -------------------------------------------------------------- */
+/* Message handling                                               */
+/* -------------------------------------------------------------- */
+             SUBR       SUBR(ERRORS)
+
+             RTVJOBA    TYPE(&JOBTP)
+
+             /* interactive */
+             IF         COND(&JOBTP = '1') THEN(DO)
+             SNDPGMMSG  MSGID(CPF9898) MSGF(QCPFMSG) MSGDTA(&MSGTXT) +
+                          TOPGMQ(*PRV) MSGTYPE(*ESCAPE)
+             ENDDO
+             /* batch       */
+             IF         COND(&JOBTP = '0') THEN(DO)
+             SNDPGMMSG  MSGID(CPF9898) MSGF(QCPFMSG) MSGDTA(&MSGTXT) +
+                          TOPGMQ(*PRV) MSGTYPE(*ESCAPE)
+             ENDDO
+
+             CALLSUBR   SUBR(END)
+
+             ENDSUBR
+
+/* -------------------------------------------------------------- */
+/* End program                                                    */
+/* -------------------------------------------------------------- */
+             SUBR       SUBR(END)
+                RETURN
+             ENDSUBR
+
+             ENDPGM
+

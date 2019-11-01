@@ -1,0 +1,133 @@
+/* ------------------------------------------------------- */
+/* XSQL0000 - XSQL command - CPP                           */
+/* Parameters:                                             */
+/*                                                         */
+/* - Source file library                                   */
+/* - Source file name                                      */
+/* - Member name                                           */
+/* - Stream file                                           */
+/* - Additional parameters                                 */
+/*                                                         */
+/*                                                         */
+/* ------------------------------------------------------- */
+             PGM        PARM(&SRCLIB &SRCFILE &SRCMBR &STMF &PARMS)
+
+             DCL        VAR(&SrcLib)  TYPE(*CHAR) LEN(10)
+             DCL        VAR(&SrcFile) TYPE(*CHAR) LEN(10)
+             DCL        VAR(&SrcMbr)  TYPE(*CHAR) LEN(10)
+             DCL        VAR(&Stmf)    TYPE(*CHAR) LEN(120)
+             DCL        VAR(&Parms)   TYPE(*CHAR) LEN(200)
+             DCL        VAR(&Error)   TYPE(*CHAR) LEN(3)
+             DCL        VAR(&NewMbr)  TYPE(*CHAR) LEN(120)
+             DCL        VAR(&NewMbr2) TYPE(*CHAR) LEN(10)
+             DCL        VAR(&jobTp)   TYPE(*CHAR) LEN(1)
+             DCL        VAR(&MsgID)   TYPE(*CHAR) LEN(7)
+             DCL        VAR(&MsgTxt)  TYPE(*CHAR) LEN(132)
+
+/* Creates work source file, if not exists                   */
+             CHKOBJ     OBJ(QTEMP/XSQLSRCF) OBJTYPE(*FILE)
+             MONMSG     MSGID(CPF9801) EXEC(DO)
+             CRTSRCPF   FILE(QTEMP/XSQLSRCF) RCDLEN(112)
+             ENDDO
+/* Source from file member  -------------------------------- */
+
+             SELECT
+             WHEN       COND(&SRCMBR *NE ' ') THEN(DO)
+             CPYSRCF    FROMFILE(&SRCLIB/&SRCFILE) +
+                          TOFILE(QTEMP/XSQLSRCF) FROMMBR(&SRCMBR) +
+                          MBROPT(*REPLACE)
+             MONMSG     MSGID(CPF2817) EXEC(DO)
+             CHGVAR     VAR(&MSGTXT) VALUE('Source member does not exist')
+             CALLSUBR   SUBR(ERRORS)
+             ENDDO
+
+             CALL       PGM(XSQL0101) PARM(&SRCMBR &PARMS &error)
+
+             IF         COND(&ERROR *EQ '   ') THEN(DO)
+                RUNSQLSTM  SRCFILE(QTEMP/XSQLSRCF) SRCMBR(&SRCMBR) +
+                          COMMIT(*NONE) MARGINS(100)
+             MONMSG     MSGID(CPF0000) EXEC(DO)
+             CHGVAR     VAR(&MSGTXT) VALUE('RUNSQLSTM command failed. +
+                          See joblog')
+             CALLSUBR   SUBR(ERRORS)
+             ENDDO
+             ENDDO
+
+             ENDDO
+/* Source from IFS stream file  ---------------------------- */
+             WHEN       COND(&STMF   *NE ' ') THEN(DO)
+             CALL       PGM(XSQL0003) PARM(&STMF &NEWMBR &NEWMBR2)
+             CPYFRMSTMF FROMSTMF(&STMF) TOMBR(&NEWMBR) MBROPT(*REPLACE)
+             MONMSG     MSGID(CPFA095) EXEC(DO)
+             CHGVAR     VAR(&MSGTXT) VALUE('Stream file does not exist')
+             CALLSUBR   SUBR(ERRORS)
+             ENDDO
+
+/* Sets member description so that it can be identified               */
+             CHGPFM     FILE(QTEMP/XSQLSRCF) MBR(&NEWMBR2) TEXT(&STMF)
+/* Replaces variables in SQL script                                   */
+             CALL       PGM(XSQL0101) PARM(&NewMbr2 &PARMS &error)
+
+/* If no errors are detected, executes the script                     */
+             IF         COND(&ERROR *EQ '   ') THEN(DO)
+                RUNSQLSTM  SRCFILE(QTEMP/XSQLSRCF) SRCMBR(&NewMbr2) +
+                          COMMIT(*NONE) MARGINS(100)
+             MONMSG     MSGID(CPF0000) EXEC(DO)
+             CHGVAR     VAR(&MSGTXT) VALUE('RUNSQLSTM command failed. +
+                          See joblog')
+             CALLSUBR   SUBR(ERRORS)
+             ENDDO
+             ENDDO
+
+             ENDDO
+
+             ENDSELECT
+
+             IF         COND(&ERROR *NE '   ') THEN(CALLSUBR +
+                          SUBR(ERRORS))
+
+/* -------------------------------------------------------------- */
+/* Message handling                                               */
+/* -------------------------------------------------------------- */
+             SUBR       SUBR(ERRORS)
+
+             RTVJOBA    TYPE(&JOBTP)
+             /* Retrieve message text           */
+             IF         COND(&ERROR *NE ' ') THEN(DO)
+                SELECT
+                WHEN COND(&ERROR *eq '011') THEN(DO)
+                   CHGVAR  VAR(&MSGTXT) VALUE('Parameter definition not valid')
+                   ENDDO
+                WHEN COND(&ERROR *eq '012') THEN(DO)
+                   CHGVAR  VAR(&MSGTXT) VALUE('Error in XSQL0002')
+                   ENDDO
+                WHEN COND(&ERROR *eq '101') THEN(DO)
+                   CHGVAR  VAR(&MSGTXT) VALUE('Error in XSQL0101')
+                   ENDDO
+                ENDSELECT
+             ENDDO
+
+             /* interactive */
+             IF         COND(&JOBTP = '1') THEN(DO)
+             SNDPGMMSG  MSGID(CPF9898) MSGF(QCPFMSG) MSGDTA(&MSGTXT) +
+                          TOPGMQ(*PRV) MSGTYPE(*ESCAPE)
+             ENDDO
+             /* batch       */
+             IF         COND(&JOBTP = '0') THEN(DO)
+             SNDPGMMSG  MSGID(CPF9898) MSGF(QCPFMSG) MSGDTA(&MSGTXT) +
+                          TOPGMQ(*PRV) MSGTYPE(*ESCAPE)
+             ENDDO
+
+             CALLSUBR   SUBR(END)
+
+             ENDSUBR
+
+/* -------------------------------------------------------------- */
+/* End program                                                    */
+/* -------------------------------------------------------------- */
+             SUBR       SUBR(END)
+                RETURN
+             ENDSUBR
+
+             ENDPGM
+
